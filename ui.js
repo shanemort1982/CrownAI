@@ -230,26 +230,54 @@ class GameUI {
     }
 
     handleSquareClick(row, col, event) {
-        if (this.animating || this.game.gameOver || this.game.currentPlayer !== 'player' || this.history.isReplaying) {
+        console.log(`[CLICK] Square clicked: (${row},${col})`);
+        console.log(`[CLICK] Animating: ${this.animating}, GameOver: ${this.game.gameOver}, CurrentPlayer: ${this.game.currentPlayer}`);
+        console.log(`[CLICK] MustContinueCapture: ${this.game.mustContinueCapture}`);
+        
+        // Allow clicks during multi-jump chains even if animating just finished
+        const isChainContinuation = this.game.mustContinueCapture && this.selectedSquare;
+        
+        if (this.game.gameOver || this.game.currentPlayer !== 'player' || this.history.isReplaying) {
+            console.log('[CLICK] Blocked by: gameOver, wrong player, or replaying');
+            return;
+        }
+        
+        // During animation, only block if NOT in chain continuation
+        if (this.animating && !isChainContinuation) {
+            console.log('[CLICK] Blocked by animation (not in chain)');
             return;
         }
 
         const piece = this.game.getPiece(row, col);
         const clickedSquare = event.currentTarget;
 
-        // If a square with a valid move is clicked
+        console.log(`[CLICK] Piece at clicked square: ${piece ? piece.type : 'none'}`);
+        console.log(`[CLICK] Selected square: ${this.selectedSquare ? 'yes' : 'no'}`);
+        console.log(`[CLICK] Is valid move square: ${clickedSquare.classList.contains('valid-move')}`);
+
+        // PRIORITY 1: If a square with a valid move is clicked (including chain continuation)
         if (this.selectedSquare && clickedSquare.classList.contains('valid-move')) {
             const fromRow = parseInt(this.selectedSquare.dataset.row);
             const fromCol = parseInt(this.selectedSquare.dataset.col);
+            console.log(`[CLICK] Valid move clicked: from (${fromRow},${fromCol}) to (${row},${col})`);
+            
+            if (isChainContinuation) {
+                console.log('[CLICK] This is a CHAIN CONTINUATION move');
+            }
+            
             this.makeMove(fromRow, fromCol, row, col);
             return;
         }
 
-        // If clicking on player's own piece
+        // PRIORITY 2: If clicking on player's own piece
         if (piece && piece.type === 'player') {
+            console.log('[CLICK] Clicked on player piece');
+            
             // If must continue capture with specific piece
             if (this.game.mustContinueCapture && this.game.selectedPiece) {
+                console.log(`[CLICK] Must continue capture with piece at (${this.game.selectedPiece.row},${this.game.selectedPiece.col})`);
                 if (this.game.selectedPiece.row !== row || this.game.selectedPiece.col !== col) {
+                    console.log('[CLICK] Cannot select different piece during chain');
                     return; // Can only select the piece that must continue capturing
                 }
             }
@@ -258,11 +286,28 @@ class GameUI {
             if (this.selectedSquare && 
                 parseInt(this.selectedSquare.dataset.row) === row && 
                 parseInt(this.selectedSquare.dataset.col) === col) {
+                console.log('[CLICK] Deselecting same piece');
+                
+                // Don't allow deselection during mandatory chain
+                if (this.game.mustContinueCapture) {
+                    console.log('[CLICK] Cannot deselect during mandatory chain');
+                    return;
+                }
+                
                 this.deselectPiece();
             } else {
+                console.log('[CLICK] Selecting piece');
                 this.selectPiece(row, col);
             }
         } else {
+            console.log('[CLICK] Clicked empty or opponent square - deselecting');
+            
+            // Don't allow deselection during mandatory chain
+            if (this.game.mustContinueCapture) {
+                console.log('[CLICK] Cannot deselect during mandatory chain');
+                return;
+            }
+            
             this.deselectPiece();
         }
     }
@@ -358,26 +403,48 @@ class GameUI {
     }
 
     async makeMove(fromRow, fromCol, toRow, toCol) {
-        if (this.animating) return;
+        console.log(`[MOVE] makeMove called: from (${fromRow},${fromCol}) to (${toRow},${toCol})`);
+        console.log(`[MOVE] Currently animating: ${this.animating}`);
+        console.log(`[MOVE] MustContinueCapture: ${this.game.mustContinueCapture}`);
+        
+        // Allow move during chain even if animating flag is set
+        const isChainContinuation = this.game.mustContinueCapture;
+        
+        if (this.animating && !isChainContinuation) {
+            console.log('[MOVE] Blocked - already animating (not in chain)');
+            return;
+        }
 
         const boardStateBefore = this.game.getBoardState();
         const moveResult = this.game.movePiece(fromRow, fromCol, toRow, toCol);
 
-        if (!moveResult) return;
+        console.log('[MOVE] Move result:', moveResult);
+
+        if (!moveResult) {
+            console.log('[MOVE] Move rejected by game logic');
+            return;
+        }
 
         this.animating = true;
-        this.deselectPiece();
+        
+        // Only deselect if NOT continuing a chain
+        if (!moveResult.canContinueCapture) {
+            this.deselectPiece();
+        }
 
         // Animate the move
+        console.log('[MOVE] Starting animation...');
         await this.animatePieceMove(fromRow, fromCol, toRow, toCol, moveResult.isCapture);
 
         // Remove captured piece if any
         if (moveResult.captured) {
+            console.log(`[MOVE] Removing captured piece at (${moveResult.captured.row},${moveResult.captured.col})`);
             this.removePiece(moveResult.captured.row, moveResult.captured.col);
         }
 
         // Handle kinging animation
         if (moveResult.isKing) {
+            console.log('[MOVE] Piece kinged!');
             await this.animateKinging(toRow, toCol);
         }
 
@@ -389,16 +456,24 @@ class GameUI {
 
         // Check if can continue capture
         if (moveResult.canContinueCapture) {
+            console.log('[MOVE] *** CAN CONTINUE CAPTURE - CHAIN MODE ***');
+            console.log(`[MOVE] Selecting piece at new position (${toRow},${toCol})`);
+            
             this.selectPiece(toRow, toCol, true); // Use immediate selection
-            this.animating = false;
+            this.animating = false; // Allow next move in chain
+            
+            console.log('[MOVE] Chain continuation ready - waiting for player click');
             return;
         }
+
+        console.log('[MOVE] Move complete - ending turn');
 
         // Switch player
         this.game.switchPlayer();
         
         // Check win condition
         if (this.game.gameOver) {
+            console.log('[MOVE] Game over detected');
             const winner = this.game.checkWinCondition();
             this.animating = false;
             setTimeout(() => this.showWinScreen(winner), 500);
@@ -409,9 +484,11 @@ class GameUI {
 
         // AI turn
         if (this.game.currentPlayer === 'ai') {
+            console.log('[MOVE] Switching to AI turn');
             this.updateStatus('AI is thinking...');
             setTimeout(() => this.makeAIMove(), 300);
         } else {
+            console.log('[MOVE] Player turn continues');
             this.updateStatus('Your turn');
         }
     }
