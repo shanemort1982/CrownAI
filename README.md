@@ -46,7 +46,7 @@ A modern, AI-powered English Draughts (Checkers) game with three difficulty leve
 ### Play Locally (Simplest)
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/CrownAI.git
+git clone https://github.com/shanemort1982/CrownAI.git
 cd CrownAI
 
 # Open in browser

@@ -48,7 +48,7 @@ git --version
 cd ~
 
 # Clone CrownAI
-git clone https://github.com/YOUR_USERNAME/CrownAI.git
+git clone https://github.com/shanemort1982/CrownAI.git
 cd CrownAI
 
 # Verify files
@@ -139,7 +139,7 @@ sudo mkdir -p /var/www/crownai
 
 # Clone repository
 cd /tmp
-git clone https://github.com/YOUR_USERNAME/CrownAI.git
+git clone https://github.com/shanemort1982/CrownAI.git
 
 # Copy files to web directory
 sudo cp -r CrownAI/* /var/www/crownai/
@@ -248,7 +248,7 @@ sudo systemctl enable httpd    # CentOS/RHEL
 cd /var/www/html
 
 # Clone repository
-sudo git clone https://github.com/YOUR_USERNAME/CrownAI.git
+sudo git clone https://github.com/shanemort1982/CrownAI.git
 
 # Set permissions
 sudo chown -R www-data:www-data CrownAI  # Ubuntu/Debian
@@ -385,7 +385,7 @@ sudo rm -rf /var/www/crownai/*
 
 # Clone fresh copy
 cd /tmp
-git clone https://github.com/YOUR_USERNAME/CrownAI.git
+git clone https://github.com/shanemort1982/CrownAI.git
 sudo cp -r CrownAI/* /var/www/crownai/
 
 # Set permissions
