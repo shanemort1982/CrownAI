@@ -199,10 +199,43 @@ class GameUI {
         this.updateStatus();
     }
 
-    selectPiece(row, col) {
+    selectPiece(row, col, immediate = false) {
         this.deselectPiece();
 
-        // Show loading indicator for complex calculations
+        // For multi-jump continuation, select immediately without timeout
+        if (immediate || this.game.mustContinueCapture) {
+            try {
+                const validMoves = this.game.getValidMoves(row, col);
+                
+                if (validMoves.length === 0) {
+                    return;
+                }
+
+                const square = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                square.classList.add('selected');
+                this.selectedSquare = square;
+
+                // Highlight valid moves
+                validMoves.forEach(move => {
+                    const targetSquare = document.querySelector(`[data-row="${move.row}"][data-col="${move.col}"]`);
+                    targetSquare.classList.add('valid-move');
+                });
+
+                // Show message for multi-jump
+                if (this.game.mustContinueCapture) {
+                    const statusText = document.querySelector('.status-text');
+                    if (statusText) {
+                        statusText.textContent = 'Continue jumping! Click highlighted square.';
+                        statusText.style.color = '#ff9800';
+                    }
+                }
+            } catch (error) {
+                console.error('Error selecting piece:', error);
+            }
+            return;
+        }
+
+        // Normal selection with loading indicator
         this.showLoadingMessage('Calculating moves...');
 
         // Use setTimeout to let UI update before heavy calculation
@@ -276,7 +309,7 @@ class GameUI {
 
         // Check if can continue capture
         if (moveResult.canContinueCapture) {
-            this.selectPiece(toRow, toCol);
+            this.selectPiece(toRow, toCol, true); // Use immediate selection
             this.animating = false;
             return;
         }
