@@ -15,6 +15,10 @@ class GameUI {
         this.AI_MAX_THINKING_TIME = 5000; // 5 seconds max
         this.aiThinkingStartTime = null;
 
+        // Multi-jump chain tracking for debugging
+        this.chainAttemptCount = 0;
+        this.totalChains = 0;
+
         this.initializeEventListeners();
         this.initializeEmergencyButton();
     }
@@ -135,7 +139,7 @@ class GameUI {
         
         // Force player turn
         this.game.currentPlayer = 'player';
-        this.game.mustContinueCapture = false;
+        this.resetChainState();
         this.animating = false;
         this.aiThinkingStartTime = null;
         
@@ -152,6 +156,28 @@ class GameUI {
         console.log('[EMERGENCY] Player turn activated');
     }
 
+    resetChainState() {
+        console.log('=== RESETTING CHAIN STATE ===');
+        console.log('[RESET] Previous state:', {
+            mustContinueCapture: this.game.mustContinueCapture,
+            selectedPiece: this.game.selectedPiece,
+            chainAttemptCount: this.chainAttemptCount
+        });
+        
+        this.game.mustContinueCapture = false;
+        this.game.selectedPiece = null;
+        
+        if (this.chainAttemptCount > 0) {
+            console.log(`[RESET] Chain completed with ${this.chainAttemptCount} jumps`);
+            this.totalChains++;
+            console.log(`[RESET] Total chains this game: ${this.totalChains}`);
+        }
+        
+        this.chainAttemptCount = 0;
+        
+        console.log('[RESET] State reset complete');
+    }
+
     showWelcomeScreen() {
         document.getElementById('welcome-screen').classList.remove('hidden');
         document.getElementById('game-screen').classList.add('hidden');
@@ -159,6 +185,7 @@ class GameUI {
     }
 
     startGame() {
+        console.log('[GAME] Starting new game');
         document.getElementById('welcome-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
         
@@ -166,6 +193,11 @@ class GameUI {
         this.game.difficulty = this.settings.difficulty;
         this.ai.setDifficulty(this.settings.difficulty);
         this.history.clear();
+        
+        // Reset chain tracking
+        this.chainAttemptCount = 0;
+        this.totalChains = 0;
+        this.resetChainState();
         
         this.renderBoard();
         this.updateScore();
@@ -179,13 +211,22 @@ class GameUI {
             this.game.currentPlayer = 'player';
             this.updateStatus('Your turn');
         }
+        
+        console.log('[GAME] New game started');
     }
 
     restartGame() {
+        console.log('[GAME] Restarting game');
         const firstPlayer = this.game.currentPlayer;
         this.game.reset();
         this.history.clear();
         this.game.currentPlayer = this.settings.firstPlayer;
+        
+        // Reset chain tracking
+        this.chainAttemptCount = 0;
+        this.totalChains = 0;
+        this.resetChainState();
+        
         this.renderBoard();
         this.updateScore();
         this.updateMoveList();
@@ -196,6 +237,8 @@ class GameUI {
         } else {
             this.updateStatus('Your turn');
         }
+        
+        console.log('[GAME] Game restarted');
     }
 
     renderBoard() {
@@ -456,19 +499,27 @@ class GameUI {
 
         // Check if can continue capture
         if (moveResult.canContinueCapture) {
+            this.chainAttemptCount++;
             console.log('[MOVE] *** CAN CONTINUE CAPTURE - CHAIN MODE ***');
+            console.log(`[MOVE] Chain jump #${this.chainAttemptCount}`);
             console.log(`[MOVE] Selecting piece at new position (${toRow},${toCol})`);
+            console.log(`[MOVE] Game state: mustContinueCapture=${this.game.mustContinueCapture}, selectedPiece=${JSON.stringify(this.game.selectedPiece)}`);
             
             this.selectPiece(toRow, toCol, true); // Use immediate selection
             this.animating = false; // Allow next move in chain
             
             console.log('[MOVE] Chain continuation ready - waiting for player click');
+            console.log(`[MOVE] Total chains so far this game: ${this.totalChains}`);
             return;
         }
 
         console.log('[MOVE] Move complete - ending turn');
+        console.log(`[MOVE] Chain had ${this.chainAttemptCount} jumps`);
 
-        // Switch player
+        // Reset chain state before switching turn
+        this.resetChainState();
+
+        // Switch player (this also resets mustContinueCapture in game.js)
         this.game.switchPlayer();
         
         // Check win condition
