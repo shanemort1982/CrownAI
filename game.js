@@ -11,6 +11,13 @@ class Game {
         this.moveCount = 0;
         this.capturedInTurn = false;
         this.mustContinueCapture = false;
+        
+        // Performance optimization settings
+        this.MAX_JUMP_DEPTH = 20; // Maximum consecutive jumps
+        this.MOVE_CALC_TIMEOUT = 2000; // 2 seconds timeout
+        this.moveCache = new Map(); // Cache for move calculations
+        this.calculationStartTime = null;
+        
         this.initializeBoard();
     }
 
@@ -51,9 +58,43 @@ class Game {
         }
     }
 
-    getValidMoves(row, col) {
+    checkTimeout() {
+        if (this.calculationStartTime && 
+            Date.now() - this.calculationStartTime > this.MOVE_CALC_TIMEOUT) {
+            console.warn('Move calculation timeout reached');
+            throw new Error('Move calculation timeout');
+        }
+    }
+
+    clearMoveCache() {
+        this.moveCache.clear();
+    }
+
+    getBoardHash() {
+        // Create a simple hash of the board state for caching
+        return JSON.stringify(this.board);
+    }
+
+    getValidMoves(row, col, depth = 0) {
+        // Check for timeout
+        this.checkTimeout();
+        
+        // Check depth limit to prevent infinite recursion
+        if (depth >= this.MAX_JUMP_DEPTH) {
+            console.warn(`Max jump depth ${this.MAX_JUMP_DEPTH} reached at position (${row}, ${col})`);
+            return [];
+        }
+
         const piece = this.getPiece(row, col);
         if (!piece) return [];
+
+        // Check cache for this position (only if not in a capture chain)
+        if (!this.mustContinueCapture && depth === 0) {
+            const cacheKey = `${row},${col},${this.getBoardHash()}`;
+            if (this.moveCache.has(cacheKey)) {
+                return this.moveCache.get(cacheKey);
+            }
+        }
 
         const moves = [];
         const captures = [];
@@ -73,9 +114,11 @@ class Game {
             const newRow = row + dRow;
             const newCol = col + dCol;
 
-            // Simple move
-            if (this.isValidPosition(newRow, newCol) && !this.getPiece(newRow, newCol)) {
-                moves.push({ row: newRow, col: newCol, isCapture: false });
+            // Simple move (only if not in capture chain)
+            if (!this.mustContinueCapture && depth === 0) {
+                if (this.isValidPosition(newRow, newCol) && !this.getPiece(newRow, newCol)) {
+                    moves.push({ row: newRow, col: newCol, isCapture: false });
+                }
             }
 
             // Capture move
@@ -100,13 +143,21 @@ class Game {
             }
         }
 
-        // If continuing a capture chain, only return capture moves
+        // Determine which moves to return
+        let result;
         if (this.mustContinueCapture) {
-            return captures;
+            result = captures;
+        } else {
+            result = captures.length > 0 ? captures : moves;
         }
 
-        // Return captures if any exist, otherwise return regular moves
-        return captures.length > 0 ? captures : moves;
+        // Cache result (only for depth 0 and not in capture chain)
+        if (!this.mustContinueCapture && depth === 0) {
+            const cacheKey = `${row},${col},${this.getBoardHash()}`;
+            this.moveCache.set(cacheKey, result);
+        }
+
+        return result;
     }
 
     canPieceCapture(row, col) {
@@ -129,66 +180,85 @@ class Game {
     }
 
     movePiece(fromRow, fromCol, toRow, toCol) {
-        const piece = this.getPiece(fromRow, fromCol);
-        if (!piece) return null;
-
-        const validMoves = this.getValidMoves(fromRow, fromCol);
-        const move = validMoves.find(m => m.row === toRow && m.col === toCol);
+        // Start timeout timer
+        this.calculationStartTime = Date.now();
         
-        if (!move) return null;
+        try {
+            const piece = this.getPiece(fromRow, fromCol);
+            if (!piece) {
+                this.calculationStartTime = null;
+                return null;
+            }
 
-        const moveResult = {
-            from: { row: fromRow, col: fromCol },
-            to: { row: toRow, col: toCol },
-            isCapture: move.isCapture,
-            captured: null,
-            isKing: false,
-            canContinueCapture: false
-        };
+            const validMoves = this.getValidMoves(fromRow, fromCol);
+            const move = validMoves.find(m => m.row === toRow && m.col === toCol);
+            
+            if (!move) {
+                this.calculationStartTime = null;
+                return null;
+            }
 
-        // Move the piece
-        this.setPiece(toRow, toCol, piece);
-        this.setPiece(fromRow, fromCol, null);
-
-        // Handle capture
-        if (move.isCapture) {
-            const capturedPiece = this.getPiece(move.capturedRow, move.capturedCol);
-            moveResult.captured = {
-                row: move.capturedRow,
-                col: move.capturedCol,
-                piece: capturedPiece
+            const moveResult = {
+                from: { row: fromRow, col: fromCol },
+                to: { row: toRow, col: toCol },
+                isCapture: move.isCapture,
+                captured: null,
+                isKing: false,
+                canContinueCapture: false
             };
-            this.setPiece(move.capturedRow, move.capturedCol, null);
 
-            // Update score
-            if (piece.type === 'player') {
-                this.aiScore++;
-            } else {
-                this.playerScore++;
+            // Move the piece
+            this.setPiece(toRow, toCol, piece);
+            this.setPiece(fromRow, fromCol, null);
+
+            // Clear move cache since board state changed
+            this.clearMoveCache();
+
+            // Handle capture
+            if (move.isCapture) {
+                const capturedPiece = this.getPiece(move.capturedRow, move.capturedCol);
+                moveResult.captured = {
+                    row: move.capturedRow,
+                    col: move.capturedCol,
+                    piece: capturedPiece
+                };
+                this.setPiece(move.capturedRow, move.capturedCol, null);
+
+                // Update score
+                if (piece.type === 'player') {
+                    this.aiScore++;
+                } else {
+                    this.playerScore++;
+                }
+
+                // Check for additional captures
+                this.mustContinueCapture = false;
+                const additionalCaptures = this.getValidMoves(toRow, toCol).filter(m => m.isCapture);
+                if (additionalCaptures.length > 0) {
+                    moveResult.canContinueCapture = true;
+                    this.mustContinueCapture = true;
+                    this.selectedPiece = { row: toRow, col: toCol };
+                }
             }
 
-            // Check for additional captures
-            this.mustContinueCapture = false;
-            const additionalCaptures = this.getValidMoves(toRow, toCol).filter(m => m.isCapture);
-            if (additionalCaptures.length > 0) {
-                moveResult.canContinueCapture = true;
-                this.mustContinueCapture = true;
-                this.selectedPiece = { row: toRow, col: toCol };
+            // Check for kinging
+            if (!piece.isKing) {
+                if ((piece.type === 'player' && toRow === 7) || (piece.type === 'ai' && toRow === 0)) {
+                    piece.isKing = true;
+                    moveResult.isKing = true;
+                }
             }
+
+            // Check win condition
+            this.checkWinCondition();
+
+            this.calculationStartTime = null;
+            return moveResult;
+        } catch (error) {
+            console.error('Error during movePiece:', error);
+            this.calculationStartTime = null;
+            return null;
         }
-
-        // Check for kinging
-        if (!piece.isKing) {
-            if ((piece.type === 'player' && toRow === 7) || (piece.type === 'ai' && toRow === 0)) {
-                piece.isKing = true;
-                moveResult.isKing = true;
-            }
-        }
-
-        // Check win condition
-        this.checkWinCondition();
-
-        return moveResult;
     }
 
     getAllPieces(playerType) {
@@ -205,13 +275,29 @@ class Game {
     }
 
     hasAnyValidMoves(playerType) {
-        const pieces = this.getAllPieces(playerType);
-        for (const { row, col } of pieces) {
-            if (this.getValidMoves(row, col).length > 0) {
-                return true;
+        // Start timeout timer
+        this.calculationStartTime = Date.now();
+        
+        try {
+            const pieces = this.getAllPieces(playerType);
+            for (const { row, col } of pieces) {
+                // Check timeout periodically
+                this.checkTimeout();
+                
+                // Early termination - return true as soon as we find one valid move
+                if (this.getValidMoves(row, col).length > 0) {
+                    this.calculationStartTime = null;
+                    return true;
+                }
             }
+            this.calculationStartTime = null;
+            return false;
+        } catch (error) {
+            console.error('Error checking valid moves:', error);
+            this.calculationStartTime = null;
+            // Return true to be safe - don't end game on error
+            return true;
         }
-        return false;
     }
 
     checkWinCondition() {

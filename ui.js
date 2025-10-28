@@ -187,21 +187,50 @@ class GameUI {
         }
     }
 
+    showLoadingMessage(message = 'Calculating moves...') {
+        const statusText = document.querySelector('.status-text');
+        if (statusText) {
+            statusText.textContent = message;
+            statusText.style.color = '#ff9800'; // Orange for "thinking"
+        }
+    }
+
+    hideLoadingMessage() {
+        this.updateStatus();
+    }
+
     selectPiece(row, col) {
         this.deselectPiece();
 
-        const validMoves = this.game.getValidMoves(row, col);
-        if (validMoves.length === 0) return;
+        // Show loading indicator for complex calculations
+        this.showLoadingMessage('Calculating moves...');
 
-        const square = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-        square.classList.add('selected');
-        this.selectedSquare = square;
+        // Use setTimeout to let UI update before heavy calculation
+        setTimeout(() => {
+            try {
+                const validMoves = this.game.getValidMoves(row, col);
+                
+                if (validMoves.length === 0) {
+                    this.hideLoadingMessage();
+                    return;
+                }
 
-        // Highlight valid moves
-        validMoves.forEach(move => {
-            const targetSquare = document.querySelector(`[data-row="${move.row}"][data-col="${move.col}"]`);
-            targetSquare.classList.add('valid-move');
-        });
+                const square = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                square.classList.add('selected');
+                this.selectedSquare = square;
+
+                // Highlight valid moves
+                validMoves.forEach(move => {
+                    const targetSquare = document.querySelector(`[data-row="${move.row}"][data-col="${move.col}"]`);
+                    targetSquare.classList.add('valid-move');
+                });
+
+                this.hideLoadingMessage();
+            } catch (error) {
+                console.error('Error selecting piece:', error);
+                this.hideLoadingMessage();
+            }
+        }, 10);
     }
 
     deselectPiece() {
