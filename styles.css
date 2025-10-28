@@ -239,6 +239,29 @@ body {
     transform: translateX(5px);
 }
 
+.emergency-btn {
+    background: #ff4444;
+    color: white;
+    border-color: #cc0000;
+    animation: pulse 2s infinite;
+    font-weight: 700;
+}
+
+.emergency-btn:hover {
+    background: #cc0000;
+    border-color: #990000;
+    transform: scale(1.05);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(255, 68, 68, 0);
+    }
+}
+
 /* Game Board */
 .board-container {
     flex-shrink: 0;

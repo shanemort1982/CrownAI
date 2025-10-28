@@ -10,7 +10,13 @@ class GameUI {
             firstPlayer: 'player'
         };
 
+        // AI timeout protection
+        this.aiMoveTimeout = null;
+        this.AI_MAX_THINKING_TIME = 5000; // 5 seconds max
+        this.aiThinkingStartTime = null;
+
         this.initializeEventListeners();
+        this.initializeEmergencyButton();
     }
 
     initializeEventListeners() {
@@ -48,6 +54,11 @@ class GameUI {
             this.showWelcomeScreen();
         });
 
+        document.getElementById('force-turn-btn').addEventListener('click', () => {
+            console.log('[EMERGENCY BUTTON] User clicked force turn');
+            this.forceSwitchToPlayerTurn();
+        });
+
         // Replay controls
         document.getElementById('replay-btn').addEventListener('click', () => {
             this.startReplay();
@@ -70,6 +81,75 @@ class GameUI {
             this.hideWinScreen();
             this.showWelcomeScreen();
         });
+    }
+
+    initializeEmergencyButton() {
+        // Emergency button shows after 8 seconds of AI thinking
+        setInterval(() => {
+            const statusText = document.querySelector('.status-text');
+            const forceBtn = document.getElementById('force-turn-btn');
+            
+            if (!statusText || !forceBtn) return;
+            
+            const status = statusText.textContent;
+            const isAIThinking = status.includes('AI') && status.includes('thinking');
+            
+            if (isAIThinking) {
+                if (!this.aiThinkingStartTime) {
+                    this.aiThinkingStartTime = Date.now();
+                }
+                
+                const thinkingDuration = Date.now() - this.aiThinkingStartTime;
+                if (thinkingDuration > 8000) {
+                    forceBtn.style.display = 'block';
+                    console.warn(`AI has been thinking for ${Math.round(thinkingDuration/1000)}s - emergency button shown`);
+                }
+            } else {
+                this.aiThinkingStartTime = null;
+                forceBtn.style.display = 'none';
+            }
+        }, 1000);
+    }
+
+    validateTurnState() {
+        const currentTurn = this.game.currentPlayer;
+        console.log(`[TURN VALIDATION] Current player: ${currentTurn}`);
+        
+        if (currentTurn !== 'player' && currentTurn !== 'ai') {
+            console.error(`[TURN VALIDATION] Invalid turn state: ${currentTurn}`);
+            this.game.currentPlayer = 'player';
+            console.log('[TURN VALIDATION] Reset to player turn');
+        }
+        
+        return currentTurn;
+    }
+
+    forceSwitchToPlayerTurn() {
+        console.log('[EMERGENCY] Force switching to player turn');
+        
+        // Clear any AI timeouts
+        if (this.aiMoveTimeout) {
+            clearTimeout(this.aiMoveTimeout);
+            this.aiMoveTimeout = null;
+        }
+        
+        // Force player turn
+        this.game.currentPlayer = 'player';
+        this.game.mustContinueCapture = false;
+        this.animating = false;
+        this.aiThinkingStartTime = null;
+        
+        // Update UI
+        this.updateStatus('Your turn');
+        this.deselectPiece();
+        
+        // Hide emergency button
+        const forceBtn = document.getElementById('force-turn-btn');
+        if (forceBtn) {
+            forceBtn.style.display = 'none';
+        }
+        
+        console.log('[EMERGENCY] Player turn activated');
     }
 
     showWelcomeScreen() {
@@ -337,16 +417,70 @@ class GameUI {
     }
 
     async makeAIMove() {
-        if (this.game.gameOver || this.game.currentPlayer !== 'ai') return;
-
-        const move = await this.ai.makeMove();
+        console.log('=== AI MOVE START ===');
+        console.log('[AI] Current player:', this.game.currentPlayer);
+        console.log('[AI] Game over:', this.game.gameOver);
+        console.log('[AI] Difficulty:', this.game.difficulty);
         
-        if (!move) {
-            console.error('AI could not find a valid move');
+        // Validate state before starting
+        if (this.game.gameOver) {
+            console.log('[AI] Game is over, aborting AI move');
+            return;
+        }
+        
+        if (this.game.currentPlayer !== 'ai') {
+            console.log('[AI] Not AI turn, aborting');
             return;
         }
 
-        await this.makeMove(move.from.row, move.from.col, move.to.row, move.to.col);
+        // Set up timeout failsafe
+        console.log(`[AI] Setting ${this.AI_MAX_THINKING_TIME/1000}s timeout`);
+        this.aiMoveTimeout = setTimeout(() => {
+            console.error('[AI TIMEOUT] AI exceeded time limit - forcing player turn');
+            alert('AI timed out. Switching to your turn.');
+            this.forceSwitchToPlayerTurn();
+        }, this.AI_MAX_THINKING_TIME);
+
+        try {
+            console.log('[AI] Calculating move...');
+            const move = await this.ai.makeMove();
+            
+            console.log('[AI] Move calculated:', move);
+            
+            if (!move) {
+                console.error('[AI] No valid move found');
+                // AI has no moves - this means player wins
+                console.log('[AI] Switching to player turn (no moves available)');
+                this.game.switchPlayer();
+                this.validateTurnState();
+                this.updateStatus();
+                return;
+            }
+
+            console.log(`[AI] Executing move from (${move.from.row},${move.from.col}) to (${move.to.row},${move.to.col})`);
+            await this.makeMove(move.from.row, move.from.col, move.to.row, move.to.col);
+            
+            console.log('[AI] Move executed successfully');
+            
+        } catch (error) {
+            console.error('[AI ERROR] Exception during AI move:', error);
+            console.error('[AI ERROR] Stack:', error.stack);
+            alert(`AI encountered an error: ${error.message}\nSwitching to your turn.`);
+            
+            // Force switch to player on error
+            this.forceSwitchToPlayerTurn();
+            
+        } finally {
+            // CRITICAL: Always clear timeout
+            if (this.aiMoveTimeout) {
+                clearTimeout(this.aiMoveTimeout);
+                this.aiMoveTimeout = null;
+                console.log('[AI] Timeout cleared');
+            }
+            
+            console.log('=== AI MOVE END ===');
+            console.log('[AI] Final player:', this.game.currentPlayer);
+        }
     }
 
     async animatePieceMove(fromRow, fromCol, toRow, toCol, isJump) {
