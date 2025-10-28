@@ -174,7 +174,14 @@ class GameUI {
                 }
             }
 
-            this.selectPiece(row, col);
+            // Check if clicking the same piece again (deselect)
+            if (this.selectedSquare && 
+                parseInt(this.selectedSquare.dataset.row) === row && 
+                parseInt(this.selectedSquare.dataset.col) === col) {
+                this.deselectPiece();
+            } else {
+                this.selectPiece(row, col);
+            }
         } else {
             this.deselectPiece();
         }
