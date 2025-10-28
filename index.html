@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draughts/Checkers Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="screen">
+        <div class="welcome-container">
+            <h1>DRAUGHTS</h1>
+            <p class="subtitle">English/American Checkers</p>
+            
+            <div class="settings-group">
+                <label>AI Difficulty:</label>
+                <div class="difficulty-buttons">
+                    <button class="difficulty-btn active" data-difficulty="easy">Easy</button>
+                    <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+                    <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+                </div>
+            </div>
+            
+            <div class="settings-group">
+                <label>First Move:</label>
+                <div class="first-move-buttons">
+                    <button class="first-move-btn active" data-first="player">Player (White)</button>
+                    <button class="first-move-btn" data-first="ai">AI (Black)</button>
+                </div>
+            </div>
+            
+            <button id="start-game-btn" class="primary-btn">Start Game</button>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen hidden">
+        <div class="game-container">
+            <!-- Left Panel: Controls -->
+            <div class="left-panel">
+                <h2>DRAUGHTS</h2>
+                
+                <div class="score-section">
+                    <h3>Score</h3>
+                    <div class="score-display">
+                        <div class="score-item">
+                            <span class="score-label">Player</span>
+                            <span id="player-score" class="score-value">0</span>
+                        </div>
+                        <div class="score-item">
+                            <span class="score-label">AI</span>
+                            <span id="ai-score" class="score-value">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="status-section">
+                    <h3>Status</h3>
+                    <div id="game-status" class="status-text">Your turn</div>
+                </div>
+                
+                <div class="controls-section">
+                    <button id="new-game-btn" class="control-btn">New Game</button>
+                    <button id="restart-btn" class="control-btn">Restart</button>
+                    <button id="settings-btn" class="control-btn">Settings</button>
+                </div>
+            </div>
+
+            <!-- Center: Game Board -->
+            <div class="board-container">
+                <div id="game-board" class="game-board"></div>
+            </div>
+
+            <!-- Right Panel: History -->
+            <div class="right-panel">
+                <h3>Move History</h3>
+                <div id="move-list" class="move-list"></div>
+                
+                <div class="replay-controls">
+                    <button id="replay-btn" class="control-btn">Replay Game</button>
+                    <div id="replay-player" class="replay-player hidden">
+                        <button id="replay-pause-btn" class="replay-control-btn">⏸</button>
+                        <button id="replay-stop-btn" class="replay-control-btn">⏹</button>
+                    </div>
+                </div>
+                
+                <button id="export-btn" class="control-btn">Export Game</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Win Screen Overlay -->
+    <div id="win-overlay" class="overlay hidden">
+        <div class="win-container">
+            <h1 id="win-message">You Win!</h1>
+            <div id="win-stats" class="win-stats"></div>
+            <canvas id="confetti-canvas"></canvas>
+            <button id="play-again-btn" class="primary-btn">Play Again</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+    <script src="ai.js"></script>
+    <script src="history.js"></script>
+    <script src="ui.js"></script>
+</body>
+</html>
